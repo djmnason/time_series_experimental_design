@@ -1,0 +1,138 @@
+---
+title: "36-618 HW2"
+author: "Daniel Nason"
+date: "2/11/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r loading, message=FALSE, results='hide', warning=FALSE}
+library(astsa)
+library(tidyverse)
+```
+
+## Question 1
+
+### a)
+
+```{r q1a}
+data <- cbind(astsa::jj, log(astsa::jj))
+colnames(data) <- c("y_t", "x_t")
+plot(data, main = "Johnson & Johnson Quarterly earnings (1960-1980)", ylab = "Earnings per share")
+```
+
+Based on the plot of the raw data $(y_t)$ over time, we see that the data resembles a multiplicative time-series model since there is both an increasing trend and increasing amplitude of the periodic trend, which illustrates non-constant autocovariance that does not depend only on time. As seen by $x_t = log(y_t)$, taking the log eliminates the increasing amplitude of the period over time even though the trend remains, which lessens this non-constant autocovariance over time. 
+
+### b)
+
+```{r q1b}
+t <- as.numeric(time(data))
+tc <- t - 1970
+q <- factor(cycle(data))
+fit <- lm(data[,2] ~ I(tc) + I(tc^2) + I(tc^3) + q)
+summary(fit)
+model.matrix(fit)
+```
+
+### c)
+
+Assuming the model is correct the logged earnings changed from the third quarter to the fourth quarter by `r round(summary(fit)$coef[dim(summary(fit)$coef)[1],1] - summary(fit)$coef[dim(summary(fit)$coef)[1]-1,1], 4)`. The quarter with the highest average logged earnings is quarter 3, and the lowest is quarter 4. The intercept term is the estimate for the first quarter and the coefficients for quarters 2-4 are estimates of the difference in average logged earnings compared to quarter 1. Quarters 2 and 3 have average logged earnings of 0.032 and 0.106 larger than quarter 1, respectively, while quarter 4 has an average logged earnings of 0.158 less than quarter 3.
+
+### d)
+
+If $\alpha_1 Q_1(t)$ was included in the model, it would be perfectly collinear with the intercept term since both would estimate the average logged earnings for J&J if the time is 1970 in quarter 1. Therefore, this term is omitted from the model since it adds redundant information to the model.
+
+### e)
+
+```{r q1e}
+plot(data[,2], main = "Log of J & J Quarterly and fitted values of earnings over time", ylab = "Log of share price", col = "blue")
+lines(t, fit$fitted.values, col = "red")
+legend("bottomright",legend = c("Actual", "Fitted"), fill = c("blue", "red"), title = "Values")
+```
+
+Comparing the fitted values to the actual values, the data appears to fit the data well for the majority of the data, with only slight deviations at the being of 1960, between 1970 and 1975 and around 1980. 
+
+### f)
+
+```{r q1f, warning=FALSE, message=FALSE}
+plot(data[,2] - fit$fitted.values, ylab = "OLS residuals", main = "Residuals of the OLS regression model")
+abline(h=0)
+par(mfrow=c(2,1))
+acf(data[,2] - fit$fitted.values)
+pacf(data[,2] - fit$fitted.values)
+par(mfrow=c(1,1))
+```
+
+The plot of the residuals do not seem to be stationary because while the mean is constant around 0, the variance is not constant across time and there is evidence of a cyclical trend. The spikes also suggest evidence of covariance over time with nearby points.
+
+Examining the ACF and PACF plots, we see that there are lagged ACF values in both plots that exceed the error bars, which implies that we cannot treat the residuals as white noise. Given that the residuals plot illustrates autocorrelation in the residuals and the ACF and PACF plots, it would not be appropriate to treat the residuals as white noise and therefore it would not be appropriate to use the OLS model from part b.
+
+## Question 2
+
+### a)
+
+```{r q2}
+data2 <- astsa::globtemp
+t2 <- time(data2)
+## linear filters
+r <- c(5, 10, 20, 50)
+cols <- c("red", "blue","green", "orange")
+#plot(data2, main = "Linear filters of raw data", ylab = "Global temperature")
+par(mfrow=c(2,2))
+for (i in 1:length(r)){
+  plot(data2,
+       main = substitute(paste("Linear filter with ", r, " equally weighted observations"), list(r = r[i])),
+       ylab = "Global temperature")
+  lines(stats::filter(data2, filter = rep(1/r[i], r[i])), col = cols[i])
+}
+
+for (i in 1:length(r)){
+  plot(data2 - stats::filter(data2, filter = rep(1/r[i], r[i])),
+       main = substitute(paste("Linear filter residuals with ", r, " equally weighted observations"), list(r = r[i])),
+       ylab = "Residuals")
+}
+
+# loess
+s <- c(0.1, 0.25, 0.5, 0.75)
+cols2 <- c("brown", "darkgrey", "gold", "cyan")
+for (j in 1:length(s)){
+  plot(data2,
+       main = substitute(paste("Loess with span ", s), list(s = s[j])),
+       ylab = "Global temperature")
+  lines(as.numeric(t2), fitted(loess(data2~t2, span = s[j])), col = cols2[j])
+}
+
+for (j in 1:length(s)){
+  plot(data2 - fitted(loess(data2~t2, span = s[j])),
+       main = substitute(paste("Loess residuals with span ", s), list(s = s[j])),
+       ylab = "Residuals")
+}
+par(mfrow=c(1,1))
+```
+
+For linear filters, as we increase the window of the moving average, the trend becomes smoother and less sensitive to random fluctuations in the data. However, even at the highest level of smoothing there are still small spikes in the smoothed trend. The window of the moving average filter can range from 1 to the length of the data set. However, this also removes observations at the tails of the data, so a larger span for the moving average filter implies more lost observations and therefore a shorter trend line relative to the data.
+
+For loess, as the span of the window increases, the trend becomes smoother and less sensitive to random fluctuations in the data. The span parameter takes on values between 0 and 1. Unlike the moving average filter, loess does not remove observations at the tails of the data and therefore can provide estimates of the trends at the boundaries regardless of the smoothing parameter. The loess outputs smoother trends between data points since it relies on a local polynomial regression function to plot the data. This polynomial fitting also better job of balancing the bias variance trade-off than linear filters in that it is less sensitive to the noise in the data.
+
+From the plots, I would choose a linear filter with a window of 10 and a loess span parameter value of 0.25. From these two, I would prefer to use loess for plotting smooth lines compared to linear filters because of the boundary behavior, the smoother fit to the data, and the fact that the model better balances the bias-variance trade-off than linear filtering.
+
+## Question 3
+
+See end of document for a and b.
+
+### c)
+
+```{r q3c, message=FALSE}
+set.seed(36618)
+ARMAacf(ma=c(0.6,-0.3), lag.max = 3) %>% round(3)
+for (i in c(100, 1000, 10000, 100000)){
+  print(arima.sim(list(ma=c(0.6, -0.3)), n = i) %>%
+          acf(na.action = na.omit, plot = F, lag.max = 3))
+}
+```
+
+We see that the theoretical ACF values match our computed values, and that as we simulate more Gaussian white noise variables the empirical autocorrelation at each lag approaches the theoretical autocorrelation values.

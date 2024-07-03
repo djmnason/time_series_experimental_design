@@ -1,0 +1,149 @@
+---
+title: "36-618 HW1"
+author: "Daniel Nason"
+date: "2/3/2022"
+geometry: margin=1in
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+# normally you'll want to include this with the libraries at the beginning of your document
+knitr::opts_chunk$set(message = FALSE) # include this if you don't want markdown to knit messages
+knitr::opts_chunk$set(warning = FALSE) # include this if you don't want markdown to knit warnings
+```
+
+```{r message = F, warning = F, echo = F, results = 'hide'}
+###########################
+# LIBRARIES
+###########################
+setwd("C:/Users/Owner/CMU/Spring/36-618/HW")
+library(knitr)
+library(xtable)
+library(tidyverse)
+library(kableExtra)
+###########################
+# SEED
+###########################
+# setting a seed because of the random components
+set.seed(36618)
+```
+
+## Question 1
+
+### a)
+
+```{r q1a}
+par(mfrow = c(2,1))
+ma <- stats::filter(ts(rnorm(500)), sides = 1, filter = c(1, 0.5, 3))
+plot(ma, ylab = "MA(2)", main = "MA(2) with 500 observations")
+acf(ma, na.action = na.omit, lag.max = 20)
+par(mfrow = c(1,1))
+```
+
+### b)
+
+```{r q1b}
+par(mfrow = c(2,1))
+ma <- stats::filter(ts(rnorm(50)), sides = 1, filter = c(1, 0.5, 3))
+plot(ma, ylab = "MA(2)", main = "MA(2) with 50 observations")
+acf(ma, na.action = na.omit, lag.max = 20)
+par(mfrow = c(1,1))
+```
+
+We see from the ACF plot that the 95% error bars are further from 0 as we drop n from 500 to 50 since the square root of n is the denominator of error bars. The ACF values after lag 2 also have a smaller magnitude for larger values of n.
+
+### c)
+
+```{r q1c}
+ARMAacf(ma=c(0.5,3))
+acf(ARMAacf(ma=c(0.5,3), lag.max = 20),
+    na.action = na.omit,
+    lag.max = 20,
+    main = "ACF for theoretical MA(2) model")
+```
+
+Comparing the theoretical ACF for the MA(2) model to the plots from a) and b), we see that the first two lags of the theoretical ACF positive and non-zero and the third value is 0. The ACFs of all the plots are relatively similar in that each plot has the first two ACFs with values that are outside of the 95% error bars (non-zero) and the remainder that lie within the bars closer to 0. We see that as we get more observations, the empirical ACF more closely resembles the theoretical ACF as plot a) more closely resembles the theoretical distribution than plot b).
+
+## Question 2
+
+### a)
+
+Several indices monitor different regions of the tropical Pacific, with the Oceanic Nino Index (ONI) commonly used to define El Nino and La Nina events. ONI covers the geographic region of the Pacific (5N-5S, 170W-120W), which is considered to represent the average equatorial SSTs (Sea Surface Temperature) across the Pacific from the dateline to the South American coast. ONI uses a 3-month running mean, and the NOAA classifies a full-fledged event (Nino/Nina) as having anomalies that exceed +/- 0.5 Celsius for at least 5 straight months.
+
+### b)
+
+```{r q2b_waste, warning=FALSE, message=FALSE, results='hide', echo=FALSE}
+# #oni_raw <- 
+# oni_raw <- read_delim("https://origin.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt") %>%
+#   dplyr::select(3,4,6,8,9) %>%
+#   rename('SEAS' = ...3, 'TOTAL' = ...6, 'ANOM1' = ...8, 'ANOM2' = ...9) %>%
+#   mutate(ANOM = coalesce(ANOM1, ANOM2)) %>%
+#   select(-c(ANOM1, ANOM2))
+# # test_df <- data.frame(a = oni %>% select(ANOM1), b = oni %>% select(ANOM2))
+# # test_df[is.na(test_df)] <- 0
+# # test_df$comb <- test_df$ANOM1 + test_df$ANOM2
+# # identical(oni$ANOM, test_df$comb)
+# # head(oni)
+# # colSums(is.na(oni))
+```
+
+```{r q2b}
+oni_raw <- read.delim("https://origin.cpc.ncep.noaa.gov/data/indices/oni.ascii.txt", sep = "")
+```
+
+### c)
+
+```{r q2c}
+oni <- oni_raw %>% select(ANOM) %>% ts(frequency = 12, start = oni_raw %>% select(YR) %>% min())
+oni
+```
+
+### d)
+
+```{r q2d}
+oni1 <- diff(oni)
+oni2 <- diff(oni1)
+oni_combined <- cbind(oni, oni1, oni2)
+colnames(oni_combined) <- c("ONI", "ONI1", "ONI2")
+oni_combined %>% head()
+```
+
+### e)
+
+```{r q2e}
+plot(oni_combined, main = "ONI, ONI1 (First Differenced), and ONI2 (Second Differenced) over time")
+```
+
+The plot for ONI suggests that there is evidence of seasonality since the ONI anomalies seem to fluctuate in regular intervals depending on the month of the year. There is also some evidence of heteroscedasticity in the data that aligns periodic fluctuations of the year. However, there is no trend in the data (since it is already defined as a 3-month moving average), as the mean seems to be roughly centered around 0. The periodicity and heteroscedasticity suggest that the ONI data are not stationary.
+
+The plot for ONI1 shows no evidence of trend. However, there does not appear to be constant variance (heteroscedasticity) and periodicity, although not as severe as the ONI data. This suggests that the ONI1 data are not stationary.
+
+The plot for ONI2 shows no evidence of trend, relatively constant variance, and no periodicity. This implies that the ONI2 data are roughly stationary.
+
+### f)
+
+```{r q2f}
+par(mfrow=c(3,1))
+acf(oni_combined[,1],
+    na.action = na.omit,
+    lag.max = 20,
+    main = 'ACF of ONI')
+acf(oni_combined[,2],
+    na.action = na.omit,
+    lag.max = 20,
+    main = 'ACF of ONI1')
+acf(oni_combined[,3],
+    na.action = na.omit,
+    lag.max = 20,
+    main = 'ACF of ONI2')
+par(mfrow=c(1,1))
+```
+
+The ACF plot for ONI illustrates that there is periodicity present in the data because of the periodic trends in the ACFs depending on the lag values. This also illustrates that autocorrelation is present in the data since the ACF values are outside the 95% error bar lines for the majority of the first 20 lags and decay exponentially toward 0.
+
+The ACF plot for ONI1 also illustrates that periodicity and autocorrelation are present in the data, but to a lesser extent than the ONI data. The ACF values are outside the bars for approximately half the lags and they periodically decay faster to 0 in the first 20 lags.
+
+The ACF plot for ONI2 illustrates that there is much less periodicity than the first two plots, however autocorrelation is still noticeably present in the first and third lags since the ACF values lie outside the error bars.
+
+None of these time series should be regarded as white noise, since there is clearly autocorrelation present, although the autocorrelation is reduced as the data is differenced. In each of the plots, there are at least 2 ACF lag values that are noticeably larger than the 95% error bars, and there is a pattern between sequential lag values. In a white noise ACF, we would expect approximately 1-2 ACF values to lie only slightly outside of the error bars and there would be no periodic trend in the direction of the ACF values.

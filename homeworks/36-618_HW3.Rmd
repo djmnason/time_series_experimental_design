@@ -1,0 +1,217 @@
+---
+title: "36-618 HW3"
+author: "Daniel Nason"
+date: "3/3/2022"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r warning=FALSE, message=FALSE, results='hide', echo=FALSE}
+setwd("C:/Users/Owner/CMU/Spring/36-618/HW/HW3")
+library(forecast)
+library(tidyverse)
+set.seed(36618)
+```
+
+## Question 1
+
+### a)
+
+```{r q1a}
+ma <- ts(as.vector(t(read.table("ma_data.dat"))))
+plot(ma, main = "Observations over time")
+acf(ma, main = "ACF values of observations")
+pacf(ma, main = "PACF values of observations")
+```
+
+The first two lag values of the ACF are outside of the error bars and the remaining values are within the error bars and are approximately 0. The first 2 lag values of the PACF are outside of the error bars but decay to within the error bars. Therefore, it is reasonable to fit an MA to these data based on the ACF and PACF and 2 is the appropriate order.
+
+### b)
+
+```{r q1b}
+q1b <- arima(ma, order=c(0,0,2), method = "CSS-ML")
+q1b
+```
+
+Since we're using an MA(2) model based on Q1a, the model is of the form $x_t = \mu + w_t + \theta_1w_{t-1} + \theta_2w_{t-2}$, where $\mu$, $\theta_1$, $\theta_2$ and $w_t$ are the estimated model parameters. The estimated coefficient values  for $\theta_1$ and $\theta_2$ are approximately `r q1b$coef[1]` and `r q1b$coef[2]`. Both estimates have standard errors that are less than half of the magnitude of the coefficient estimates (`r sqrt(diag(q1b$var.coef))[1]` and `r sqrt(diag(q1b$var.coef))[2]`, respectively), so these coefficients would be statistically significant from 0 at the 5% level of significance. The intercept estimate for $\mu$ is `r q1b$coef[3]`, but this is not statistically significantly different from 0 at the 5% level of significance since the standard error is more than half the size of the parameter estimate. Additionally, the estimated parameter value for $w_t$ is `r q1b$sigma2 %>% sqrt()`.
+
+### c)
+
+```{r q1c_acf}
+print("ACFs for fitted values")
+acf(ma, plot = F, lag.max = 20) 
+cat("\n")
+print("ACFs for theoretical values")
+ARMAacf(ma=c(q1b$coef[1],q1b$coef[2]), lag.max = 20) %>% round(3)
+```
+
+Comparing the fitted and theoretical ACF values, we see that both have an ACF value of 1 at lag 0, and similar magnitude and identical sign estimates for lags 1 and 2. While the theoretical ACF values are all 0 for values beyond lag 2 by definition, the ACF values for the fitted model slightly deviation from 0 beyond lag 2 likely due to randomness in the sample data. As seen from the previous ACF plot in Q1a, all of these values are within the 95% error bars. Therefore, it is reasonable to say that the theoretical and sample ACF values are consistent with one another.
+
+```{r q1c_pacf}
+print("PACFs for fitted values")
+pacf(ma, plot = F, lag.max = 20) 
+cat("\n")
+print("PACFs for theoretical values")
+ARMAacf(ma=c(q1b$coef[1],q1b$coef[2]), lag.max = 20, pacf = T) %>% round(3)
+```
+
+Comparing the fitted and theoretical PACF values, we see that both have an PACFs of similar magnitude and identical sign estimates for lags 1, 2 and 3. The theoretical PACF values approximately decay to 0 by lagged term 7, and the sample PACF values also decay to around 0 in later lags as well. However, there is some randomness in the values so there is slightly more deviation from 0 in the fitted model, but these are within the 95% error bars as seen in the PACF plot from Q1a. Therefore, it is reasonable to say that the theoretical and sample PACF values are consistent with one another.
+
+### d)
+
+```{r q1d_obs_v_fit}
+plot(ma, main = "Observations vs. fitted MA(2) values", ylab = "Values")
+lines(ma-q1b$resid, col="red")
+legend("bottomright",legend = c("Actual", "Fitted"), fill = c("black", "red"))
+```
+
+Comparing the observations to the fitted values, we see that the fitted values tend to model the center of the observations well but do not capture the magnitude of the noise fluctuations very well. However,  since an MA(q) is trying to model with a weighted combination of other noise terms and can only have a maximum ACF value of 0.5 the white noise terms are assumed to be uncorrelated. Therefore, this lack of fit of the noise terms is not unexpected from the reduced autocorrelation and suggests that the MA model is a good fit for the data.
+
+```{r q1d_resid}
+plot(q1b$resid, main = "Fitted MA(2) residual values", ylab = "Residual values")
+acf(q1b$resid, main = "ACF of fitted MA(2) residual values")
+qqnorm(q1b$resid)
+qqline(q1b$resid)
+```
+
+The residual values of MA(2) model are centered at 0, have relatively constant variance, and do not exhibit behaviors of autocorrelation since sequential terms do not usually have similar values based on the fluctuations in the residual values. The ACF plot shows that all the lagged values beyond lag 0 of the residuals are approximately within the 95% error bars, and Q-Q plot illustrates that the residuals follow a normal distribution since the theoretical and sample quantiles are linearly related with only minor deviations from normality at the tails. These suggest that the residuals are Gaussian white noise.
+
+```{r q1d_simulations}
+set.seed(36618)
+plot(arima.sim(n = length(ma),
+               list(ma = c(q1b$coef[1], q1b$coef[2]),
+                    sd = sqrt(q1b$sigma2) + q1b$coef[3])),
+     main = "Simulated MA(2) values using the fitted coefficients",
+     ylab = "Simulated values")
+```
+
+The behavior of the simulated values using the coefficients from the fitted model mirror the sample data observations, which also strengthens the argument that the sample data are from an MA(2) process.
+
+Given that the fitted values roughly approximate the sample observations (based on the definition of the MA model), the residuals display Gaussian white noise behavior, and the simulated values are similar to the sample observations, this implies that the MA(2) is appropriate and a good fit for the sample data.
+
+### e)
+
+```{r q1e}
+q1e <- arima(ma, order=c(2,0,0), method = "CSS-ML")
+AIC(q1e)
+AIC(q1b)
+```
+
+If an AR(p) model were to be fit to the data, the appropriate order p would be 2 since the PACF values of the first 2 lags are outside of the 95% error bars as seen in Q1a. The AIC value for the AR(2) model is `r AIC(q1e)`, which is greater than the AIC for MA(2) of `r AIC(q1b)`. Therefore, the MA(2) model is preferred since it has the lower AIC value.
+
+## Question 2
+
+### a)
+
+The model can be rewritten as $(1 - B + 0.5B^2)x_t = (1 - B)w_t$ where B is the backshift operator.
+
+```{r q2a}
+# AR roots
+abs(polyroot(c(1,-1,0.5)))
+# MA roots
+abs(polyroot(c(1,-1)))
+```
+Common factors: there are no common factors between the AR polynomial $\phi(B)$ and the MA polynomial $\theta(B)$, so the order of the model is ARMA(2, 1).
+
+AR: For the AR polynomial $1-B+0.5B^2$, the roots are strictly greater than 1 in absolute value so the ARMA model is both stationary and causal.
+
+MA: Since the For the MA polynomial $1-B$, the root is not strictly greater than 1 in absolute value so the model is not invertible.
+
+
+### b)
+
+The model can be rewritten as $(1 - 1.5B + 0.5B^2)x_t = (1 - B)w_t$ where B is the backshift operator.
+
+```{r q2b}
+# AR roots
+abs(polyroot(c(1,-1.5,0.5)))
+# MA roots
+abs(polyroot(c(1,-1)))
+```
+Common factors: since there is a common factor $1-B$ in both the AR polynomial $\phi(B)$ and the MA polynomial $\theta(B)$, this can be removed and the model can be rewritten as $(B - 2)x_t = w_t$. The order of the model is ARMA(1, 0) which could be rewritten as AR(1).
+
+AR: For the AR polynomial $(B - 2)$, the roots are strictly greater than 1 in absolute value so the ARMA model is both stationary and causal.
+
+MA: Since the polynomial can be written as an AR(1) model and the AR models are always invertible by definition since they can be written as an MA($\infty$) model, the model is invertible.
+
+### c)
+
+The model can be rewritten as $(1 - 0.8B + 0.15B^2)x_t = (1 - 0.3B)w_t$ where B is the backshift operator.
+
+```{r q2c}
+# AR roots
+abs(polyroot(c(1,-.8,0.15)))
+# MA roots
+abs(polyroot(c(1,-.3)))
+```
+Common factors: since there is a common factor $1-\frac{3}{10}B$ in both the AR polynomial $\phi(B)$ and the MA polynomial $\theta(B)$, this can be removed and the model can be rewritten as $(B - 2)x_t = w_t$. The order of the model is ARMA(1, 0) which could be rewritten as AR(1).
+
+AR: For the AR polynomial $(B - 2)$, the roots are strictly greater than 1 in absolute value so the ARMA model is both stationary and causal.
+
+MA: Since the polynomial can be written as an AR(1) model and the AR models are always invertible by definition since they can be written as an MA($\infty$) model, the model is invertible.
+
+## Question 3
+
+### a)
+
+```{r q3a}
+oni <- read.delim("oni.ascii_Dec_2021.txt", sep = "")
+anom <- ts(oni$ANOM, start = 1950, frequency = 12)
+plot(anom, main = "Anomalies over time", ylab = "Anomaly")
+monthplot(anom, main = "Anomalies over time by month", ylab = "Anomaly")
+acf(anom, main = "ACF of anomalies")
+pacf(anom, main = "PACF of anomalies")
+```
+
+Based on the plot and monthly plot of the anomalies, there is no evidence of a mean trend since the mean stays relatively constant around 0 and the variance stays approximately constant over time suggesting the data are stationary. However, there is a evidence of a seasonal cycle as indicated by the monthly plot, where the anomalies decrease from January to April and/or May, stay relatively constant through June, and then continue to increase starting from July until December. The ACF and PACF plots suggest that this could be an AR(2) process because of the exponential decay in the lagged ACF values and the cut off in PACF values after lag 2 since most of the values are within or close to the 95% error bars. While there are some lags (3 and 5) that are slightly outside of the error bars for the PACF plot, lag 2 was selected since it is likely that the PACF values are outside due to randomness in the data and therefore the more parsimonious model is selected.
+
+### b)
+
+```{r q3b}
+auto.arima(anom, max.p = 5, max.q = 5, max.order = 10, stationary = T, seasonal = F, trace = T, stepwise = F, approximation = F)
+```
+
+The auto.arima function, based on the values of the parameters inputted into the function), searches across the possible combinations of orders for the ARIMA (p, d, q) model where p is the order of lags for an AR process, d is the order of differencing, and q is the order of lags for a MA process. For the argument parameters, max.p and max.q limit the the AR and MA orders to the parameter values, respectively, and max.order limits the max summation of max.p and max.q if the model selection is not stepwise. The true stationary argument restricts the search to stationary models, the false seasonal argument restricts the search to non-seasonal models; trace set to T displays the ARIMA models considered, stepwise set to F searches over all possible model combinations, and approximation set to F uses MLE for each model to estimate their AIC/AICc/BIC values and chooses the selected model from these criteria.
+
+The model selected by auto.arima is the ARIMA(3,0,5) model, so p = 3 and q = 5. The parameter estimates are provided in the output. With the exception of the intercept and parameter estimate for the MA 2 term, all of the estimated parameter coefficients are at least twice the size of their standard error estimates, and so are statistically significant at the 5% level.
+
+### c)
+
+```{r q3c_fit}
+q3c <- arima(anom, order=c(3,0,5))
+plot(anom, main = "Observations vs. fitted ARIMA(3,0,5) values", ylab = "Values")
+lines(anom-q3c$resid, col="red")
+legend("bottomright",legend = c("Actual", "Fitted"), fill = c("black", "red"))
+```
+
+Comparing the observations to the fitted values, we see that the fitted values fit the data extremely well and capture almost all of the fluctations in the sample. This suggests that the ARIMA model is a good fit for the data.
+
+```{r q3c_resid}
+plot(q3c$resid, main = "Fitted ARIMA(3,0,5) residual values", ylab = "Residual values")
+acf(q3c$resid, main = "ACF of fitted ARIMA(3,0,5) residual values")
+pacf(q3c$resid, main = "PACF of fitted ARIMA(3,0,5) residual values")
+qqnorm(q3c$resid)
+qqline(q3c$resid)
+```
+
+The residual values of ARIMA(3,0,5) model are centered at 0, have relatively constant variance even with a few spikes and do not exhibit behaviors of autocorrelation since sequential terms do not usually have similar values based on the fluctuations. The ACF and PACF plots show that all the lagged values beyond lag 0 of the residuals are approximately within the 95% error bars; there are some lags that slightly lie outside the error bars although these could correspond to the outliers seen in the plot of the data over time. Q-Q plot illustrates that the residuals follow a normal distribution since the theoretical and sample quantiles are linearly related for the majority of the data; however, there are some minor deviations from normality at the tails. These suggest that the residuals are Gaussian white noise.
+
+```{r q3c_simulations}
+set.seed(36618)
+plot(arima.sim(n = length(anom), list(ma = q3c$coef[4:8], ar = q3c$coef[1:3], sd = sqrt(q3c$sigma2) + q3c$coef[9])),
+     main = "Simulated ARIMA(3,0,5) values using the fitted coefficients",
+     ylab = "Simulated values")
+```
+
+The behavior of the simulated values using the coefficients from the fitted model mirror the sample data, which also strengthens the argument that the sample data could be from a ARIMA(3,0,5) process.
+
+Given that the fitted values fit the sample observations very well, the residuals display Gaussian white noise behavior, and the simulated values are similar to the sample observations, this implies that the ARIMA(3,0,5) is appropriate and a good fit for the data.
+
+### d)
+
+The issue with the monthly subseries plot is that there is seasonality in the data which varies by month. There is a cyclical trend based on the time of year where the anomalies are lowest during the summer months (May-July) and highest during the winter months (November-February). This behavior suggests that there is evidence of non-stationarity since the autocovariance in the data is dependent on time and not just the size of the lag between times. Some potential ways to correct for this non-constant variance would be to apply transformations to the data such as a logarithm or square root to try to stabilize the variance. Different modeling forms could also be considered, such as applying differencing and/or seasonal differencing on the data using SARIMA models. More parametric approaches could also be considered, such as GLS if the functional form of the variance is known or seasonal trend decomposition with loess.

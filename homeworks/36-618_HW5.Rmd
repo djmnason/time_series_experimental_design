@@ -1,0 +1,337 @@
+---
+title: "36-618 HW5"
+author: "Daniel Nason"
+date: "4/4/2022"
+output:
+  pdf_document: default
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r load_data_packages, warning=FALSE, message=FALSE}
+setwd("C:/Users/Owner/CMU/Spring/36-618/HW/HW5")
+library(forecast)
+library(astsa)
+library(vars)
+library(fGarch)
+library(tidyverse)
+data <- ts(econ5, start = c(1948,2), frequency = 4)
+```
+
+## Question 1
+
+### a)
+
+```{r q1a}
+# detrending the data
+log_emp_lm <- lm(log(data[,1]) ~ time(data), na.action = NULL)
+log_gnp_lm <- lm(log(data[,2]) ~ time(data), na.action = NULL)
+log_con_lm <- lm(log(data[,3]) ~ time(data), na.action = NULL)
+log_emp <- resid(log_emp_lm)
+log_gnp <- resid(log_gnp_lm)
+log_con <- resid(log_con_lm)
+log_data <- cbind(log_emp, log_gnp, log_con)
+plot(log_data, main = 'Detrended logged US unemployment, GNP, and consumption')
+```
+
+The time series seem to all be related in that there is autocorrelation present among the detrended time series and there is a cyclical pattern that is affecting all of the trends. Specifically, the unemployment and GNP are like reflections of each other in that they trend in opposite directions over time. Consumption is not a mirror image of either of these series, but it trends more closely with GNP and therefore tends to trend in the opposite direction of unemployment.
+
+These results align with standard economic theory, since consumption is a major additive component of a country's GNP and is driven directly by consumer spending behavior. Similarly, people tend to spend more money based on their income, so less unemployment means more people have jobs and so are spending more money, which drives consumption and therefore GNP. The reverse is also true: more unemployment implies less income which results in less consumer spending and therefore a reduction in GNP.
+
+### b)
+
+```{r q1b}
+VARselect(log_data, type = 'none')
+q1b <- VAR(log_data, p = 2, type = 'none')
+summary(q1b)
+```
+
+Since there are 3 univariate time series and we're fitting a VAR(2) model that has removed trend and intercept, there will be three models that each have 6 parameters. 
+
+For the unemployment model, we see that for a single lag the coefficient of unemployment is positive while the coefficient of GNP and consumption is negative. Similarly, the signs of the coefficients for the second order lagged terms are also different for unemployment compared to GNP and consumption; however, in this case the signs are flipped in that the coefficient estimate is positive for unemployment and negative for the other two. This alternating coefficient signs suggests that there is negative autocorrelation between unemployment and GNP as well as negative autocorrelation between unemployment and consumption, which reflects the relationships observed in part a). All of the coefficients are also statistically significant at at least the 5% level. The adjusted $r_t^2$ also suggests the model is a good fit since it is greater than 90%.
+
+For the GNP model, we see similar trends in the coefficient estimates from the unemployment model in that for a single lag the coefficient of unemployment is negative while the coefficient of GNP and consumption is positive. Similarly, the signs of the coefficients for the second order lagged terms are also different for unemployment compared to GNP and consumption; however, in this case the signs are flipped in that the coefficient estimate is negative for unemployment and positive for the other two. The alternating coefficient signs suggests that there is negative autocorrelation between unemployment and GNP as well as negative autocorrelation between unemployment and consumption, which reflects the relationships observed in part a). However, in this model only the first order lag coefficients for GNP and consumption are statistically significant at the 5% level. The adjusted $r_t^2$ also suggests the model is a good fit since it is greater than 90%.
+
+For the consumption model, the coefficient estimates are all not statistically significant at the 5% level except for the first order lag for GNP and consumption. Also, the only negative coefficient estimate for model is the second order lag of GNP, although this is not statistically significant at the 5% level. This is different from the other two models but consistent with the findings in part a); that is, consumption seems to be less strongly correlated with the other two variables, which are essentially reflections of one another. The adjusted $r_t^2$ also suggests the model is a good fit since it is greater than 90%.
+
+### c)
+
+```{r q1c_acf_ccf}
+acf(resid(q1b))
+mtext('ACFs and CCFs for all models',
+      side = 3, cex = 1.2, line = -1,
+      outer = T)
+```
+
+#### Unemployment model 
+
+&nbsp;
+
+```{r q1c_log_emp_fit, warning=FALSE}
+plot(ts(log_emp[3:length(log_emp)], start = c(1948,4), frequency = 4),
+     main = "Observations vs. fitted VAR(2) values for unemployment",
+     ylab = "Logged and detrended unemployment")
+lines(ts(log_emp[3:length(log_emp)], start = c(1948,4), frequency = 4) -
+         q1b$varresult$log_emp$residuals, col="red")
+legend("topright",legend = c("Actual", "Fitted"), fill = c("black", "red"))
+```
+
+Comparing the observations to the fitted values, we see that the fitted values fit the data relatively well, although the these seem to be slightly shifted to the right for the majority of the data compared to the actual data. However, overall this fit suggests the model is a good fit for the data.
+
+```{r q1c_log_emp_res}
+plot(ts(q1b$varresult$log_emp$residuals, frequency = 4, start = c(1948,4)),
+     main = 'Residuals of VAR(2) model for unemployment',
+     ylab = 'Residuals')
+qqnorm(q1b$varresult$log_emp$residuals)
+qqline(q1b$varresult$log_emp$residuals)
+```
+
+The residual values of model are centered at 0 and have relatively constant variance. The variance do not exhibit behaviors of autocorrelation since sequential terms do not usually have similar values based on the fluctuations. The ACF and CCF plots shown above illustrated that for unemployment all the lagged values beyond lag 0 of the residuals are approximately within the 95% error bars. The Q-Q plot illustrates that the residuals follow a normal distribution since the theoretical and sample quantiles are linearly related for the majority of the data; however, there are some minor deviations from normality at the tails. These suggest that the residuals are roughly Gaussian vector white noise.
+
+Given that the fitted values fit the sample observations reasonably well and the residuals display Gaussian white noise behavior, this implies that the VAR(2) model is appropriate and a good fit for the unemployment data. 
+
+#### GNP model
+
+&nbsp;
+
+```{r q1c_log_gnp_fit, warning=FALSE}
+plot(ts(log_gnp[3:length(log_gnp)], start = c(1948,4), frequency = 4),
+     main = "Observations vs. fitted VAR(2) values for GNP",
+     ylab = "Logged and detrended GNP")
+lines(ts(log_gnp[3:length(log_gnp)], start = c(1948,4), frequency = 4) -
+         q1b$varresult$log_gnp$residuals, col="red")
+legend("topright",legend = c("Actual", "Fitted"), fill = c("black", "red"))
+```
+
+Comparing the observations to the fitted values, we see that the fitted values fit the data relatively well, although the these seem to be slightly shifted to the right for the majority of the data compared to the actual data. However, overall this fit suggests the model is a good fit for the data.
+
+```{r q1c_log_gnp_res}
+plot(ts(q1b$varresult$log_gnp$residuals, frequency = 4, start = c(1948,4)),
+     main = 'Residuals of VAR(2) model for GNP', ylab = 'Residuals')
+qqnorm(q1b$varresult$log_gnp$residuals)
+qqline(q1b$varresult$log_gnp$residuals)
+```
+
+The residual values of model are centered at 0 and have relatively constant variance. The variance do not exhibit behaviors of autocorrelation since sequential terms do not usually have similar values based on the fluctuations. The ACF and CCF plots shown above illustrated that for GNP all the lagged values beyond lag 0 of the residuals are approximately within the 95% error bars. The Q-Q plot illustrates that the residuals follow a normal distribution since the theoretical and sample quantiles are linearly related for the majority of the data; however, there are some minor deviations from normality at the tails. These suggest that the residuals are roughly Gaussian white noise.
+
+Given that the fitted values fit the sample observations reasonably well and the residuals display Gaussian vector white noise behavior, this implies that the VAR(2) model is appropriate and a good fit for the GNP data. 
+
+#### Consumption model
+
+&nbsp;
+
+```{r q1c_log_con_fit, warning=FALSE}
+plot(ts(log_con[3:length(log_con)], start = c(1948,4), frequency = 4),
+     main = "Observations vs. fitted VAR(2) values for Consumption",
+     ylab = "Logged and detrended Consumption")
+lines(ts(log_con[3:length(log_con)], start = c(1948,4), frequency = 4) -
+         q1b$varresult$log_con$residuals, col="red")
+legend("topright",legend = c("Actual", "Fitted"), fill = c("black", "red"))
+```
+
+Comparing the observations to the fitted values, we see that the fitted values fit the data relatively well, although the these seem to be slightly shifted to the right for the majority of the data compared to the actual data. However, overall this fit suggests the model is a good fit for the data.
+
+```{r q1c_log_con_res}
+plot(ts(q1b$varresult$log_con$residuals, frequency = 4, start = c(1948,4)),
+     main = 'Residuals of VAR(2) model for consumption', ylab = 'Residuals')
+qqnorm(q1b$varresult$log_con$residuals)
+qqline(q1b$varresult$log_con$residuals)
+```
+
+The residual values of model are centered at 0 and have relatively constant variance. The variance do not exhibit behaviors of autocorrelation since sequential terms do not usually have similar values based on the fluctuations. The ACF and CCF plots shown above illustrated that for consumption all the lagged values beyond lag 0 of the residuals are approximately within the 95% error bars. The Q-Q plot illustrates that the residuals follow a normal distribution since the theoretical and sample quantiles are linearly related for the majority of the data; however, there are some minor deviations from normality at the tails. These suggest that the residuals are roughly Gaussian vector white noise.
+
+Given that the fitted values fit the sample observations reasonably well and the residuals display Gaussian vector white noise behavior, this implies that the VAR(2) model is appropriate and a good fit for the consumption data.
+
+Overall this suggests that the VAR(2) model is an appropriate fit for a vector of each of the 3 univariate time series for unemployment, GNP, and consumption.
+
+### d)
+
+#### forecast without trend
+
+&nbsp;
+
+```{r q1d_no_trend}
+q1di <- predict(q1b, n.ahead = 4*6)
+log_emp_fcst <- ts(q1di$fcst$log_emp[,1], start = c(1988,3), frequency = 4)
+log_emp_total <- ts(c(log_emp, log_emp_fcst), start = c(1948,2), frequency = 4)
+log_emp_fcst_lower <- ts(q1di$fcst$log_emp[,2], start = c(1988,3), frequency = 4)
+log_emp_fcst_upper <- ts(q1di$fcst$log_emp[,3], start = c(1988,3), frequency = 4)
+
+log_gnp_fcst <- ts(q1di$fcst$log_gnp[,1], start = c(1988,3), frequency = 4)
+log_gnp_total <- ts(c(log_gnp, log_gnp_fcst), start = c(1948,2), frequency = 4)
+log_gnp_fcst_lower <- ts(q1di$fcst$log_gnp[,2], start = c(1988,3), frequency = 4)
+log_gnp_fcst_upper <- ts(q1di$fcst$log_gnp[,3], start = c(1988,3), frequency = 4)
+
+log_con_fcst <- ts(q1di$fcst$log_con[,1], start = c(1988,3), frequency = 4)
+log_con_total <- ts(c(log_con, log_con_fcst), start = c(1948,2), frequency = 4)
+log_con_fcst_lower <- ts(q1di$fcst$log_con[,2], start = c(1988,3), frequency = 4)
+log_con_fcst_upper <- ts(q1di$fcst$log_con[,3], start = c(1988,3), frequency = 4)
+
+par(mfrow = c(3,1))
+plot(log_emp_total,
+     main = 'Forecasted log unemployment without trend for next 6 years',
+     ylab = 'Log unemployment')
+lines(log_emp_fcst, col = 'red', lty = 6)
+lines(log_emp_fcst_lower, col = 'blue', lty = 6)
+lines(log_emp_fcst_upper, col = 'blue', lty = 6)
+abline(v = max(time(data)) + 1/max(cycle(data)), lty = 2, col = 'blue')
+
+plot(log_gnp_total,
+     main = 'Forecasted log GNP without trend for next 6 years',
+     ylab = 'Log GNP')
+lines(log_gnp_fcst, col = 'red', lty = 6)
+lines(log_gnp_fcst_lower, col = 'blue', lty = 6)
+lines(log_gnp_fcst_upper, col = 'blue', lty = 6)
+abline(v = max(time(data)) + 1/max(cycle(data)), lty = 2, col = 'blue')
+
+plot(log_con_total,
+     main = 'Forecasted log consumption without trend for next 6 years',
+     ylab = 'Log consumption',
+     ylim = c(-.08,.08))
+lines(log_con_fcst, col = 'red', lty = 6)
+lines(log_con_fcst_lower, col = 'blue', lty = 6)
+lines(log_con_fcst_upper, col = 'blue', lty = 6)
+abline(v = max(time(data)) + 1/max(cycle(data)), lty = 2, col = 'blue')
+par(mfrow = c(1,1))
+#plot(q1di)
+# plot(cbind(unemp = log_emp_fcst, gnp = log_gnp_fcst, cons = log_con_fcst),
+#      main = 'Forecasted unemployment, GNP, and consumption for next 6 years')
+# plot(q1di,
+#      xlim = c(length(resid(q1di$model))/3-dim(q1di$fcst$log_emp)[1],
+#               length(resid(q1di$model))/3+dim(q1di$fcst$log_emp)[1]))
+# plot(q1di)
+```
+
+Forecasting without a trend, we see that the model predicts that GNP and consumption will reach their minimums between 1990 and 1991 while unemployment will reach its maximum around 1991. After these extreme are reached, however, GNP and consumption are projected to increase through the start of 1994 and unemployment is projected to decrease (although at a slower rate than GNP and consumption increase) through the start of 1994.
+
+#### forecast with trend
+
+&nbsp;
+
+```{r q1d_trend}
+forecast_time <- seq(time(data)[length(time(data[,1]))]+0.25,
+                     time(data)[length(time(data[,1]))]+6,
+                     by = 0.25)
+
+log_emp_trend_fcst <- coef(log_emp_lm)[1] + coef(log_emp_lm)[2]*forecast_time + log_emp_fcst
+log_gnp_trend_fcst <- coef(log_gnp_lm)[1] + coef(log_gnp_lm)[2]*forecast_time + log_gnp_fcst
+log_con_trend_fcst <- coef(log_con_lm)[1] + coef(log_con_lm)[2]*forecast_time + log_con_fcst
+
+log_emp_comb <- ts(c(as.vector(log(data[,1])),log_emp_trend_fcst), start = c(1948,2), frequency = 4)
+log_gnp_comb <- ts(c(as.vector(log(data[,2])),log_gnp_trend_fcst), start = c(1948,2), frequency = 4)
+log_con_comb <- ts(c(as.vector(log(data[,3])),log_con_trend_fcst), start = c(1948,2), frequency = 4)
+
+
+par(mfrow = c(3,1))
+plot(log_emp_comb, #xlim = c(1948, 1995),
+     main = 'Forecasted log unemployment with trend for next 6 years',
+     ylab = 'Log unemployment')
+lines(forecast_time, log_emp_trend_fcst, col = 'red', lty = 6)
+abline(v = max(time(data)) + 1/max(cycle(data)), lty = 2, col = 'blue')
+
+plot(log_gnp_comb, #xlim = c(1948, 1995), ylim = c(7, 9),
+     main = 'Forecasted log GNP with trend for next 6 years',
+     ylab = 'Log GNP')
+lines(forecast_time, log_gnp_trend_fcst, col = 'red', lty = 6)
+abline(v = max(time(data)) + 1/max(cycle(data)), lty = 2, col = 'blue')
+
+plot(log_con_comb, #xlim = c(1948, 1995), ylim = c(6, 9),
+     main = 'Forecasted log consumption with trend for next 6 years',
+     ylab = 'Log consumption')
+lines(forecast_time, log_con_trend_fcst, col = 'red', lty = 6)
+abline(v = max(time(data)) + 1/max(cycle(data)), lty = 2, col = 'blue')
+# plot(cbind(unemp = log_emp_trend_fcst, gnp =  log_gnp_trend_fcst, cons =  log_con_trend_fcst),
+#      main = 'Forecasted unemployment, GNP, and consumption (with trend) for next 6 years')
+par(mfrow = c(1,1))
+```
+
+Forecasting with a trend, we see that an increasing trend occurs for unemployment in that it peaks around 1991 and then slowly decreases and eventually remains constant by 1994. This is relatively similar to the projection without a trend. However, the forecast with trend exhibits slightly different behavior for GNP and consumption relative to the forecast without trend. With the trend, wee see that both GNP and consumption are predicted to increase only from 1988 through the start of 1994.
+
+## Question 2
+
+### a)
+
+We are given that 
+
+\begin{eqnarray*}
+r_t & = & \sigma_t \epsilon_t \\
+\sigma_t^2 & = & \alpha_0 + \sum_{j=1}^p \alpha_j r_{t-j}^2 + \sum_{j=1}^q \beta_j \sigma_{t-j}^2
+\end{eqnarray*}
+
+and that $v_t=\sigma_t^2(\epsilon_t^2-1)$.
+
+Using these equations we see that $r_t^2=(\sigma_t\epsilon_t)^2$ and therefore
+
+$$
+r_t^2 - \sigma_t^2 = (\sigma_t\epsilon_t)^2 - \sigma_t^2 = \sigma_t^2 (\epsilon_t^2 - 1) = v_t
+$$
+
+and so $\sigma_t^2=r_t^2-v_t$. We can use this to plug into the second equation which yields
+
+\begin{eqnarray*}
+\sigma_t^2 & = & \alpha_0 + \sum_{j=1}^p \alpha_j r_{t-j}^2 + \sum_{j=1}^q \beta_j \sigma_{t-j}^2 \\
+r_t^2 - v_t & = & \alpha_0 + \sum_{j=1}^p \alpha_j r_{t-j}^2 + \sum_{j=1}^q \beta_j (r_{t-j}^2 - v_{t-j}) \\
+r_t^2 & = & \alpha_0 + \sum_{j=1}^p \alpha_j r_{t-j}^2 + \sum_{j=1}^q \beta_j r_{t-j}^2 + v_t - \sum_{j=1}^q v_{t-j}
+\end{eqnarray*}
+
+and since we are given that $\alpha_j=0$ for $j>p$ and $\beta_j=0$ for $j>q$, this can then be written as 
+
+$$
+r_t^2 = \alpha_0 + \sum_{j=1}^{max(p,q)} (\alpha_j + \beta_j) r_{t-j}^2 + v_t - \sum_{j=1}^q v_{t-j}
+$$
+
+### b)
+
+```{r q2b}
+rt <- diff(log(EuStockMarkets[,'SMI']))
+rt2 <- rt^2
+tsdisplay(rt, main = 'Log-return of SMI time series with ACF and PACF')
+acf(rt2, main = 'ACF of squared log-return of SMI time series')
+pacf(rt2, main = 'PACF of squared log-return of SMI time series')
+```
+
+From the plots for $r_t$ we see that it is approximately white noise since the data are roughly centered at zero and are not temporally correlated over time since sequential observations do not have similar signs. However, there is volatility in this data with spikes randomly occurring throughout the time series such as in 1991 or 1996. Additionally, the ACF and PACF plots show that the majority of the ACF and PACF values at different lags are within the 95% error bars. 
+
+Examining the ACF and PACF plot for $r_t^2$, we see that in both plots that the respective values for the first two lags are noticeably outside of the 95% percent error bars. These results and a) suggest that a GARCH(p,q) model could be reasonable for $r_t$ since $r_t^2$ displays ARMA(p,q) structure.
+
+### c)
+
+```{r q2c, cache=TRUE}
+q2c_fit <- auto.arima(rt2, max.p = 5, max.q = 5, max.order = 10, stationary = T, seasonal = F, trace = T, stepwise = F, approximation = F)
+```
+
+The auto.arima function identifies the ARMA(1,1) model is appropriate for $r_t^2$, so using part a) the model specified should be GARCH(1,1).
+
+### d)
+
+```{r q2d, warning=FALSE}
+q2d_fit <- garchFit(~garch(1,1), data = rt)
+summary(q2d_fit)
+# round(q2d_fit@fit$matcoef, 6)
+plot(q2d_fit, which = 2)
+```
+
+From the summary we see that the parameter estimates are all statistically significantly different from 0 at the 5% level or lower. The mu term represents the mean of the model, omega is the intercept term of the volatility of $r_t$ (defined as $\sigma_t^2$ in part a), alpha1 represents the first lag of the squared log-return and beta1 is the first lag of the volatility of $r_t$.
+
+The plot of the conditional standard deviation clearly shows that the variance is not constant over time and that there are spikes that randomly occur in the standard deviation and align with the spikes in the log-return of the original time series, which further illustrates that the GARCH model is appropriate since it allows for conditional heteroscedasticity over the data points.
+
+\newpage
+
+## Question 3
+
+How
+
+In the technology industry, designed experiments are used to determine how changing a minor feature can influence an outcome measure of interest. A/B testing is a popular example of this, and its conducted by changing a small feature in a technology application (i.e. website) and then randomly assigning users to either the A group (control) or B group (treatment) and measuring differences in usage. This can also be extended to more univariable tests (i.e. A/B/C/D testing where A is control and the rest are treatments) or multivariable testing. Measures are referred to as overall evaluation criterion (OEC) and need to be developed by the experiment designer in order to measure the success of the experiment. This often relies on domain expertise, so the designers of the experiment typically need to work with the relevant stakeholders and experts when preparing an experiment.
+
+In addition to establishing these measures, preliminary data checks should also be considered to make sure the experiment gets rigorous results. A/A testing is an example of this, where the users are randomly assigned both to the control, with the expectation being that the OEC measures should agree about 95% of the time. Other considerations include outliers or errors and technical issues when collecting data from the experiment as well as other relevant covariates. Collecting this additional data can allow the experiments to disaggregate the data and analyze whether the results hold across these specific subdemographics. Other experimental considerations are to avoid reusing the same users in treatment/control groups by reshuffling them between treatment and control in order to prevent carryover effects of users being assigned to the same group repeated times. Checks are also run to validate that the percentage of users in the experiment match up with the initial design of the experiment.
+
+The article specifically mentions three different types of models for experimentation that are employed by businesses. The first is the centralized model, where a team serves the entire company. This has the benefit of focusing on long-term projects for better tools and algorithms. However, the drawbacks are that different units of the business have different priorities, and the team has less domain knowledge and may not be able to convince management of their results. The second is the decentralized model where experimenters are distributed through the company, thus allowing them to gain domain expertise. However, the experiments may have a difficult time advancing because they cannot develop skills, or their experiments are not relevant. The final model mentioned is the center of excellence model, which combines the first two models mentioned. This lowers the time and resources needed for experimentation and spreads best practices throughout the organization. The drawback is that there is not ownership clarity and responsibility and therefore it is difficult to appropriately allocate resources. The context of the business usually dictates which model is most appropriate.
+
+Simple designs are preferred in order to find the relationship between a treatment and control group, but it is important to note that correlation doesn't necessary imply causation in the context of A/B testing. This is because there is typically insufficient controls available to account for other factors that may cause differences between treatment and control groups.
+
+Why
+
+Designed experiments are often employed in the technology industry because they are typically low cost experiments to randomly assign users for a controlled experiment. The results allow the companies to quickly assess the quality of new ideas such as models, strategies, products, services, and marketing campaigns. This allows more scientific decision-making to optimize business performance rather than being based on domain knowledge intuition alone. Similarly, these experiments can be used to help guide investments in future features by quantifying the impact of these decisions and measuring the tradeoffs in rolling out potential new features. Technology firms can often quickly collect large amounts of data about these small changes that provide value to the business. The experiments are usually very scalable for larger companies assuming they have sufficient infrastructure to collect and analyze the data and can be run concurrrently to save time and money. 
