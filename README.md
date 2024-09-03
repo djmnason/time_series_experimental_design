@@ -1,5 +1,7 @@
 # Time Series and Experimental Design
 
+- Authors: Alana Willis, Clare Cruz, Daniel Nason, Megan Christy
+
 ## Time Series Analysis Final Project
 
 The presentation can be found [here](./final_project/time_series_presentation.pdf), as well as the [written report](./final_project/time_series_report.pdf).
